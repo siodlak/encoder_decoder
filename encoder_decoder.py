@@ -1,10 +1,44 @@
+#!/usr/bin/python3
 """
-It is Py script to encode and decode text. There are shuffled middle char in words and left first and last.
+It is Py script to encode and decode text. Just use it in any directory you wish.
+The script is designed to encode and decode text in that way: for each original word in the original text,
+there are left the first and last character and shuffle all the characters in the middle of the word.   
+
+Warning:
+    Decoder module is designed to unambiguous handle text. In conflict case only raise exception and stop execution.
+
+Passing -t or --test [text to handle] argument is mandatory. User can choice explicit script mode: decode or encode.
+There is possible to pass text to decode and original words list in separate arguments.
+Passing optional argument -l or --list_original [original words list] enable that mode.
+
+Arguments:
+    -h, --help                                            show this help message and exit
+    -t TEXT, --text TEXT                                  Text to handle
+    -l [LIST_ORIGINAL], --list_original [LIST_ORIGINAL]   Original words list
+    -e, --encode                                          Encode text with attached original words
+    -d, --decode                                          Decode text
+    -v, --verbose                                         Enable to print output
+
+Requirements:
+Python 3.6
+
+Examples:
+    Automatic mode
+        encoder_decoder.py -t "Text to handle"
+    Encoding
+        encoder_decoder.py -e -t "Text to handle"
+    Decoding
+        encoder_decoder.py -d -t "Text to handle"
+    Verbose
+        encoder_decoder.py -v -t "Text to handle"
+    Separate original words list from text to decode
+        encoder_decoder.py -v -t "Text to handle"
+
 """
 import argparse
 import re
-from random import shuffle
 from itertools import permutations
+from random import shuffle
 
 
 class ConsolePrompt:
@@ -13,12 +47,12 @@ class ConsolePrompt:
     """
 
     def __init__(self):
-        self.parser = argparse.ArgumentParser(description="Module to encode and decode taxt", add_help=True)
-        self.parser.add_argument("-t", "--text", type=str, help="Text to automatic handle")
-        self.parser.add_argument("-e", "--encode", type=str, help="Text to encode with attached original words list")
-        self.parser.add_argument("-d", "--decode", type=str, help="Text to decode")
+        self.parser = argparse.ArgumentParser(description="Script to encode and decode text", add_help=True)
+        self.parser.add_argument("-t", "--text", type=str, required=True, help="Text to handle")
         self.parser.add_argument("-l", "--list_original", nargs='*', type=str, default=[], help="Original words list")
-        self.parser.add_argument("-v", "--verbose", action="store_true", help="Enable print output")
+        self.parser.add_argument("-e", "--encode", action="store_true", help="Encode text with attached original words")
+        self.parser.add_argument("-d", "--decode", action="store_true", help="Decode text")
+        self.parser.add_argument("-v", "--verbose", action="store_true", help="Enable to print output")
         self.__args = self.parser.parse_args()
 
         self._output = None
@@ -32,17 +66,17 @@ class ConsolePrompt:
             text_decoder = TextDecoder(self.__args.text, self.__args.list_original)
             self._output = text_decoder.decode_text()
         elif bool(self.__args.encode):
-            text_encoder = TextEncoder(self.__args.encode)
+            text_encoder = TextEncoder(self.__args.text)
             self._output = text_encoder.encode_text()
         elif bool(self.__args.decode):
-            text_decoder = TextDecoder(self.__args.decode)
+            text_decoder = TextDecoder(self.__args.text)
             self._output = text_decoder.decode_text()
         elif bool(self.__args.text):  # if it is not selected, script try decode passed text in failure case encode it
             try:
                 text_decoder = TextDecoder(self.__args.text)
                 self._output = text_decoder.decode_text()
             except InputTextException:
-                print("Trying to encode")
+                print("Trying to encode (auto mode)")
                 text_encoder = TextEncoder(self.__args.text)
                 self._output = text_encoder.encode_text()
 
@@ -146,8 +180,8 @@ class TextDecoder(TextHandler):
         or take two argument -  separate encoded text and original words list
         """
         super().__init__()
-        # if text to decode and list are in one string
-        self._text_to_decode, self._original_words = text_to_decode.split(self.separator)[1:]
+        self._text_to_decode, self._original_words = text_to_decode.split(
+            self.separator)[1:]  # if text to decode and list are in one string
         self._original_words = self._original_words.split(' ')  # change var type
         if original_words is not None:
             self._original_words = original_words  # if text to decode and list are separately
@@ -178,8 +212,10 @@ class TextDecoder(TextHandler):
                 if possible_word == original_word:
                     match_words.append(original_word)
 
-        if len(match_words) != 1:
-            raise AmbiguityException(match_words)
+        if len(match_words) > 1:
+            raise AmbiguityException(set(match_words))
+        if len(match_words) == 0:
+            raise NoMatchWordException
         return match_words[0]
 
     def decode_text(self):
@@ -191,6 +227,7 @@ class TextDecoder(TextHandler):
         words_to_decode = re.findall(r'\w+', self._text_to_decode)
         for word in words_to_decode:
             decoded_word = self.decode_word(word)
+
             self._decoded_text = re.sub(word, decoded_word, self._decoded_text)
         return self._decoded_text  # to test and verbose purpose
 
@@ -229,6 +266,12 @@ class AmbiguityException(Exception):
 
         print("There are more than one word match to pattern:")
         [print(word) for word in self.match_words]
+
+
+class NoMatchWordException(Exception):
+    """
+    Raise exception when there is not match to pattern word
+    """
 
 
 if __name__ == '__main__':
